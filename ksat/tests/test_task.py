@@ -1,20 +1,14 @@
-from ksat.task import new_task_id, Task, task_from_dict, TaskStatus
+import uuid
+from ksat.task import Task, TaskStatus
 
 
-def test_new_task_id():
-    assert len(new_task_id()) == 32
+def test_serialize_and_deserialize():
+    task_id = uuid.uuid4().hex
+    task = Task("super duper path", (1, 2), status=TaskStatus.FAILED, task_id=task_id)
 
-
-def to_and_from_dict():
-    task_id = new_task_id()
-    expected_task = Task(task_id, "super duper path", (1, 2), TaskStatus.FAILED)
-
-    task_dict = {
-        "id":task_id,
-        "path": "super duper path",
-        "args": (1, 2),
-        "status": "FAILED",
-    }
-
-    assert task_from_dict(task_dict) == expected_task
+    round_trip_task = Task.deserialize(task.serialize())
+    assert round_trip_task.id == task.id
+    assert round_trip_task.status == task.status
+    assert round_trip_task.path == task.path
+    assert round_trip_task.args == task.args
 

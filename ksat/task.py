@@ -1,4 +1,5 @@
 from collections import namedtuple
+import pickle
 import uuid
 import enum
 
@@ -13,16 +14,16 @@ class TaskStatus(enum.Enum):
     FAILED = 4
 
 
-Task = namedtuple("Task", ["id", "path", "args", "status"])
+class Task:
+    def __init__(self, path, args, status=TaskStatus.WAITING, task_id=None):
+        self.id = task_id or uuid.uuid4().hex 
+        self.path = path
+        self.args = args
+        self.status = status
 
+    @classmethod
+    def deserialize(cls, serialized_task: str):
+        return pickle.loads(serialized_task)
 
-def task_from_dict(task_dict: dict) -> Task:
-    return Task(
-        task_dict["id"],
-        task_dict["path"],
-        task_dict["args"],
-        TaskStatus[task_dict["status"]])
-
-
-def new_task_id() -> str:
-    return uuid.uuid4().hex
+    def serialize(self) -> str:
+        return pickle.dumps(self)

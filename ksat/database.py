@@ -1,5 +1,7 @@
 from typing import Optional
-from ksta.task import TaskStatus, Task, task_from_dict, new_task_id
+import json
+import base64
+from ksat.task import TaskStatus, Task
 
 
 class DB:
@@ -37,13 +39,9 @@ class JsonFileDB(DB):
 
     The JSON implementation uses a JSON encoded as a string in the file.
     The schema of the JSON is as follows:
-    {
-        "task_id": {
-            "path": "abc",
-            "args": (1, 2, 3),
-            "status": "PENDING",
-        },
-        "task_id2": {...},
+   { 
+        "task_id": <b64 encoded string of pickled bytes>,
+        "task_id2": <b64 encoded string of pickled bytes>,
         ...
     }
     """
@@ -58,34 +56,35 @@ class JsonFileDB(DB):
 
     def save_db(self, db_dict):
         with open(self.filename, 'w') as f:
-            f.write(json.dump(db_dict))
+            json.dump(db_dict, f)
 
     def get_task_by_id(self, task_id: str) -> Optional[Task]:
         # Read from file everytime to not worry about memory state for now
-        db = get_db_as_dict()
-        task_dict = db.get(task_id)
-        if task_dict is None:
+        db = self.get_db_as_dict()
+        serialized_task = db.get(task_id)
+        if serialized_task is None:
             return None
-        return task_from_dict(task_dict)
-
+        return Task.deserialize(base64.b64decode(serialized_task))
 
     def save_task(self, task: Task):
-        # Read from file everytime to not worry about memory state for now
-        db = get_db_as_dict()
-        db[Task.id] = Task._asdict()
+        db = self.get_db_as_dict()
+        pickled_bytes = task.serialize()  # this calls pickle.dumps
+        b64_encoded = base64.b64encode(pickled_bytes)
+        db[task.id] = b64_encoded.decode('ascii')
         self.save_db(db)
 
     def enqueue_task(self, path, args) -> Task:
-        # How do we encode args?
-        task = Task(new_task_id(), path, args, TaskStatus.WAITING)
+        task = Task(path, args)
         self.save_task(task)
 
     def dequeue_task(self) -> Optional[Task]:
-        db = get_db_as_dict()
+        db = self.get_db_as_dict()
         selected_task = None
-        for task_id, task_dict in db.items():
-            if task_dict["status"] == TaskStatus.WAITING.name:
-                selected_task = task_from_dict(task_dict)
+        for task_id, serialized_task in db.items():
+            # Deserializint all tasks is not efficient
+            task = Task.deserialize(serialized_task)
+            if task.status == TaskStatus.WAITING:
+                selected_task = task
                 break
 
         if selected_task is None:
